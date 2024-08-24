@@ -21,7 +21,7 @@ pendulum==3.0.0
 psycopg2-binary==2.9.9
 pydantic~=1.10.18
 pydantic_core==2.20.1
-PyJWT==2.4.0
+PyJWT<2.0.0,>=1.7.1
 pypika-tortoise==0.1.6
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
