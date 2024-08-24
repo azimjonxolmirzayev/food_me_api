@@ -80,6 +80,14 @@ class CafeUpdate(BaseModel):
 
 class MenuCreate(BaseModel):
     name: str
+    cafe_id: int
+
+    class Config:
+        orm_mode = True
+
+
+class MenuUpdate(BaseModel):
+    name: str
 
     class Config:
         orm_mode = True
@@ -93,3 +101,14 @@ class UpdateCafeRequest(BaseModel):
     wifipass: str
     logo_url: str
     image_url: str
+
+
+class ProductCreate(BaseModel):
+    name: str
+    price: float
+    description: str = None  # Optional field
+    menu_id: int
+    cafe_id: int
+
+    class Config:
+        orm_mode = True

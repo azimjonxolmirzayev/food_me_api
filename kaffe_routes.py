@@ -1,10 +1,15 @@
+import io
+
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
+from starlette.responses import StreamingResponse
+import qrcode
 
 from database import session, engine
 from model import Cafes, User, Products, Menu
-from schemas import CafeCreate, CafeResponse, ProductResponse, MenuResponse, CafeUpdate, UpdateCafeRequest, MenuCreate
+from schemas import CafeCreate, CafeResponse, ProductResponse, MenuResponse, CafeUpdate, UpdateCafeRequest, MenuCreate, \
+    MenuUpdate, ProductCreate
 from fastapi_jwt_auth import AuthJWT
 
 kaffe_routes = APIRouter(
@@ -99,6 +104,47 @@ async def get_menu_products(cafe_id: int, menu_id: int, db: Session = Depends(ge
     return products
 
 
+@kaffe_routes.post('/{cafe_id}/menus/{menu_id}/products', response_model=ProductCreate)
+async def create_product(
+        cafe_id: int,
+        menu_id: int,
+        product: ProductCreate,
+        db: Session = Depends(get_session)
+):
+    db_product = Products(
+        name=product.name,
+        price=product.price,
+        description=product.description,
+        menu_id=menu_id,
+        cafe_id=cafe_id
+    )
+    db.add(db_product)
+    db.commit()
+    db.refresh(db_product)
+    return db_product
+
+
+@kaffe_routes.get("/generate-qrcode/{cafe_id}")
+async def generate_qrcode(cafe_id: str):
+    # QR kodni yaratamiz
+    qr = qrcode.QRCode(version=1, box_size=10, border=4)
+    qr.add_data(f'https://example.com/cafe/{cafe_id}')  # Cafe URL yoki boshqa ma'lumot
+    qr.make(fit=True)
+    img = qr.make_image(fill='black', back_color='white')
+
+    # QR kodni PNG formatida saqlaymiz
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+
+    # StreamingResponse orqali yuklash uchun javob qaytaramiz
+    return StreamingResponse(
+        buf,
+        media_type="image/png",
+        headers={"Content-Disposition": f"attachment; filename=cafe-{cafe_id}-qrcode.png"}
+    )
+
+
 @kaffe_routes.get('/{cafe_id}/menus', response_model=list[MenuResponse])
 async def get_cafe_menus(cafe_id: int, db: Session = Depends(get_session)):
     menus = db.query(Menu).filter(Menu.cafe_id == cafe_id).all()
@@ -184,11 +230,21 @@ async def update_user_cafe(
     return jsonable_encoder(existing_cafe)
 
 
-@kaffe_routes.put('/menus/{menu_id}', response_model=MenuResponse)
-async def update_menu(menu_id: int, menu: MenuCreate, db: Session = Depends(get_session)):
+@kaffe_routes.post('/{cafe_id}/menus', response_model=MenuCreate)
+async def create_menu(cafe_id: int, menu: MenuCreate, db: Session = Depends(get_session)):
+    # Yangi menyu yaratish
+    db_menu = Menu(name=menu.name, cafe_id=cafe_id)
+    db.add(db_menu)
+    db.commit()
+    db.refresh(db_menu)
+    return db_menu
+
+
+@kaffe_routes.put('/menus/{menu_id}', response_model=MenuUpdate)
+async def update_menu(menu_id: int, menu: MenuUpdate, db: Session = Depends(get_session)):
     db_menu = db.query(Menu).filter(Menu.id == menu_id).first()
     if not db_menu:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Menyu topilmadi")
+        raise HTTPException(status_code=404, detail="Menu not found")
 
     db_menu.name = menu.name
     db.commit()
@@ -204,4 +260,3 @@ async def delete_menu(menu_id: int, db: Session = Depends(get_session)):
 
     db.delete(db_menu)
     db.commit()
-
